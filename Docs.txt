@@ -1,0 +1,274 @@
+this is local yaml file --->
+
+name: MLOps CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v2
+
+      - name: ✅ Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: ✅ Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: ✅ Set Python Path
+        run: echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      - name: ✅ Lint Code
+        run: pylint src/*.py api/*.py --disable=R,C
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v2
+
+      - name: ✅ Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: ✅ Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: ✅ Run Unit Tests
+        run: pytest tests/ --disable-warnings
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v2
+
+      - name: ✅ Deploy Application
+        run: |
+          echo "🚀 Deploying application..."
+          # Add deployment script here (e.g., Docker, AWS, Heroku, etc.)
+
+
+this is on server yaml file ------> 
+This is in .github folder .
+
+
+
+
+For Dockerfile --->>>>>
+
+docker build -t saurabhbrd/loan_default_app .
+docker run -p 8501:8501 saurabhbrd/loan_default_app
+docker login 
+docker push saurabhbrd/loan_default_app
+
+
+Add AWS Access Credentials into github secrets . 
+
+Now pipeline will work perfectly . 
+
+
+###### How to add Apache Airflow .
+
+📌 What Will Apache Airflow Do in This Project?
+Apache Airflow will help you: 
+✅ Automate the CI/CD pipeline execution
+✅ Monitor and schedule Docker container deployment
+✅ Trigger workflows when new code is pushed
+✅ Retry failed steps and alert you in case of errors
+✅ Orchestrate multiple workflows (like data processing, ETL, ML models, etc.)
+
+
+🛠 Step 1: Install Docker on Your EC2 Instance
+Since Airflow runs in Docker, install Docker on your EC2 instance:
+
+sudo apt update
+sudo apt install docker.io -y
+sudo systemctl start docker
+sudo systemctl enable docker
+
+docker --version
+
+
+🛠 Step 2: Clone Your CI/CD Project in EC2
+
+git clone https://github.com/your-repo.git
+cd your-repo
+
+🛠 Step 3: Install Docker-Compose
+Airflow requires docker-compose.
+
+sudo apt install docker-compose -y
+
+
+docker-compose --version
+
+
+
+🛠 Step 4: Create a docker-compose.yaml for Airflow
+Inside your project directory, create an airflow folder:
+
+mkdir airflow && cd airflow
+
+Create a docker-compose.yaml file:
+vim docker-compose.yaml
+
+Add the following content:
+
+version: '3.8'
+
+services:
+  airflow:
+    image: apache/airflow:2.7.0
+    container_name: airflow
+    restart: always
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__WEBSERVER__SECRET_KEY=my_secret_key
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+
+
+🛠 Step 5: Start Airflow
+Run the following command inside the airflow folder:
+
+docker-compose up -d
+
+Check running containers:
+docker ps 
+
+After it starts, open Airflow in a browser:
+http://your-ec2-ip:8080
+
+(Default username: airflow, password: airflow)
+
+
+🛠 Step 6: Create an Airflow DAG to Automate CI/CD
+A DAG (Directed Acyclic Graph) in Airflow defines a workflow.
+
+Create a dags folder:
+mkdir dags && cd dags
+
+Create a new DAG:
+vim ci_cd_pipeline.py
+
+Add the following code:
+
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from datetime import datetime
+
+default_args = {
+    'owner': 'airflow',
+    'start_date': datetime(2024, 3, 10),
+    'retries': 1,
+}
+
+dag = DAG(
+    'ci_cd_pipeline',
+    default_args=default_args,
+    schedule_interval='@daily',
+    catchup=False,
+)
+
+build = BashOperator(
+    task_id='build_image',
+    bash_command='docker build -t myrepo/loan_default_app:latest .',
+    dag=dag,
+)
+
+push = BashOperator(
+    task_id='push_image',
+    bash_command='docker push myrepo/loan_default_app:latest',
+    dag=dag,
+)
+
+deploy = BashOperator(
+    task_id='deploy_container',
+    bash_command='''ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@your-ec2-ip "
+        docker pull myrepo/loan_default_app:latest &&
+        docker stop loan_default_app || true &&
+        docker rm loan_default_app || true &&
+        docker run -d -p 8501:8501 --name loan_default_app myrepo/loan_default_app:latest"''',
+    dag=dag,
+)
+
+build >> push >> deploy
+
+
+🛠 Step 7: Restart Airflow and Trigger DAG
+Restart Airflow:
+
+docker-compose down
+docker-compose up -d
+
+
+Go to the Airflow UI (http://your-ec2-ip:8080), enable ci_cd_pipeline DAG, and manually trigger it.
+
+📌 Final Workflow
+✅ GitHub Actions triggers CI/CD on push
+✅ Apache Airflow schedules and monitors deployment
+✅ Airflow retries failures and alerts you
+
+
+
+
+
+🔹 Step 1: Open Apache Airflow UI
+1️⃣ Open your browser and go to:
+http://your-ec2-ip:8080
+
+🔹 Replace your-ec2-ip with your actual EC2 public IP
+🔹 Example: If your EC2 IP is 3.92.145.27, go to:
+http://3.92.145.27:8080
+
+2️⃣ Login to Airflow
+
+Username: airflow
+Password: airflow
+(Unless you changed these in the docker-compose.yaml file)
+🔹 Step 2: Enable the ci_cd_pipeline DAG
+1️⃣ On the Airflow homepage, look for the DAGs list
+
+You should see ci_cd_pipeline in the list.
+2️⃣ Enable the DAG:
+
+Click the toggle switch in the "On/Off" column to turn it ON
+✅ This makes sure the DAG is active and can be triggered.
+🔹 Step 3: Manually Trigger the DAG
+1️⃣ Click on the ci_cd_pipeline DAG name to open it.
+2️⃣ Click the Trigger DAG ▶️ button (a play button in the top-right).
+3️⃣ This will start the CI/CD pipeline execution manually.
+
+🎯 What Happens After Triggering?
+✅ Airflow will execute the DAG steps in order:
+
+Build Docker Image
+Push Image to Docker Hub
+Deploy the container to AWS EC2
+✅ You can monitor logs in Airflow UI:
+
+Click on a task (e.g., build_image)
+Click "Logs" to see real-time execution output.
+
+If you want it to run automatically, set schedule_interval='@daily' or a custom cron schedule.
+
+
+
+
